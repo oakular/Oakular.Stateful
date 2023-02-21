@@ -1,0 +1,15 @@
+mode: Mainline
+major-version-bump-message: '\+version:\s?(major)'
+minor-version-bump-message: '\+version:\s?(feature|minor)'
+patch-version-bump-message: '\+version:\s?(patch|bug)'
+no-bump-message: '\+version:\s?(none|skip)'
+branches:
+  main:
+    tag: ''
+    increment: Minor
+  release:
+    tag: ''
+    increment: Patch
+ignore:
+  sha: []
+merge-message-formats: {}

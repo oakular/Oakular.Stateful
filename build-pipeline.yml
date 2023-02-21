@@ -1,0 +1,138 @@
+trigger:
+- main
+- feature/*
+- bug/*
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  buildConfiguration: 'Debug'
+  nugetFeed: '00c5e0f3-38c0-4b38-a715-685a937410c6'
+
+stages:
+  - stage: Build
+    jobs:
+      - job: PackPackage
+        displayName: 'Pack Package'
+        steps:
+        - checkout: self
+          fetchDepth: 0
+
+        - task: NuGetAuthenticate@1
+          inputs:
+            forceReinstallCredentialProvider: true
+
+        - task: gitversion/setup@0
+          displayName: 'Setup gitversion'
+          inputs:
+            versionSpec: '5.x'
+
+        - task: gitversion/execute@0
+          name: Version
+          displayName: 'Update version'
+          inputs:
+            useConfigFile: true
+            configFilePath: './GitVersion.yml'
+            targetPath: $(Build.SourcesDirectory)
+
+        - task: Assembly-Info-NetCore@3
+          displayName: Set Assembly Information
+          inputs:
+            Path: '$(Build.SourcesDirectory)'
+            FileNames: '**/*.csproj'
+            InsertAttributes: true
+            FileEncoding: 'auto'
+            WriteBOM: false
+            VersionNumber: '$(GitVersion.AssemblySemVer)'
+            FileVersionNumber: '$(GitVersion.AssemblySemFileVer)'
+            InformationalVersion: '$(GitVersion.InformationalVersion)'
+            PackageVersion: '$(GitVersion.NuGetVersion)'
+            LogLevel: 'verbose'
+            FailOnWarning: false
+            DisableTelemetry: true
+
+        - script: dotnet restore
+          displayName: 'Restore packages'
+
+        - script: dotnet build --configuration $(buildConfiguration)
+          displayName: 'Build'
+
+        - task: DotNetCoreCLI@2
+          displayName: 'Run unit tests'
+          inputs:
+            command: 'test'
+            arguments: '--configuration $(buildConfiguration) --no-build --collect "Code coverage"'
+
+        - task: PublishSymbols@2
+          displayName: 'Publish symbols'
+          inputs:
+            SearchPattern: '**/bin/**/*.pdb'
+            SymbolServerType: 'TeamServices'
+
+        - task: NuGetCommand@2
+          inputs:
+            command: 'pack'
+            packagesToPack: '**/*.csproj;!**/*.CodeFixes*.csproj;!**/*.Tests.csproj'
+            configuration: 'Release'
+            versioningScheme: 'byEnvVar'
+            versionEnvVar: 'GitVersion.NuGetVersion'
+
+        - task: NuGetCommand@2
+          inputs:
+            command: 'push'
+            packagesToPush: '$(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg'
+            nuGetFeedType: 'internal'
+            publishVstsFeed: '$(nugetFeed)'      
+           
+  - stage: Promote
+    condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'main'))
+    jobs:
+      - job: PromoteRelease
+        displayName: 'Promote Release'
+        variables:
+          packageVersion: $[ stageDependencies.Build.PackPackage.outputs['Version.GitVersion.NuGetVersion'] ]
+        steps:
+        - checkout: self
+        
+        - task: PowerShell@2
+          displayName: 'Promote Packages to Release View'
+          inputs:
+            targetType: 'inline'
+            script: |
+              $packages = Get-ChildItem -Directory -include "*Oakular*" -exclude "*Tests*" -Name
+              $pkgVersion = "$(packageVersion)"
+
+              Write-Host $packages
+              
+              Foreach ($pkg in $packages)
+              {
+                  Write-Host $pkg
+                  Write-Host $pkgVersion
+
+                  $Header = @{
+                      authorization = "Basic $(Tokens.ArtifactPromotion)"
+                  }
+
+                  $Body = @{
+                      views = @{
+                          op = "add"
+                          path = "/views/-"
+                          value = "Release"
+                      }
+                  }
+
+                  $uri = "https://pkgs.dev.azure.com/oakular/_apis/packaging/feeds/Global/nuget/packages/$pkg/versions/${pkgVersion}?api-version=6.0-preview.1"
+
+                  Write-Host $uri
+                  
+                  $Parameters = @{
+                      Method = "PATCH"
+                      Uri =  $uri
+                      Body = ($Body | ConvertTo-Json)
+                      ContentType = "application/json"
+                      Headers = $Header
+                  }
+              
+                  Invoke-RestMethod @Parameters
+              }
