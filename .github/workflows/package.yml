@@ -36,10 +36,10 @@ jobs:
       run: dotnet restore
       
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore -c Release
       
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test --no-build --verbosity normal -c Release
       
     - name: Package
-      run: dotnet pack --no-build -p:PackageVersion=${{ steps.version.outputs.nuGetVersionV2 }} --output pkg
+      run: dotnet pack --no-build -p:PackageVersion=${{ steps.version.outputs.nuGetVersionV2 }} -c Release
