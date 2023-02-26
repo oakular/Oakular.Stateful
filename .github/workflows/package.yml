@@ -42,7 +42,7 @@ jobs:
       run: dotnet test --no-build --verbosity normal -c Release
       
     - name: Package
-      run: dotnet pack --no-build -p:PackageVersion=${{ steps.version.outputs.nuGetVersionV2 }} -c Release
+      run: dotnet pack --no-build -p:PackageVersion=${{ steps.version.outputs.nuGetVersion }} -c Release
       
     - name: Push
-      run: dotnet nuget push ./Oakular.Stateful/bin/Release/Oakular.Stateful.${{ steps.version.outputs.nuGetVersionV2 }}.nupkg -k ${{ secrets.NUGET_API_KEY }}
+      run: dotnet nuget push ./Oakular.Stateful/bin/Release/Oakular.Stateful.${{ steps.version.outputs.nuGetVersion }}.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
