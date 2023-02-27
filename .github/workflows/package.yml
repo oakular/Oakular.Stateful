@@ -59,5 +59,7 @@ jobs:
       uses: actions/download-artifact@v3.0.2
       with:
         name: Oakular.Stateful.${{ needs.build.outputs.pkgVersion }}.nupkg
-    - name: Push
+    - name: Push to NuGet
       run: dotnet nuget push Oakular.Stateful.${{ needs.build.outputs.pkgVersion }}.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
+    - name: Push to GitHub Packages
+      run: dotnet nuget push Oakular.Stateful.${{ needs.build.outputs.pkgVersion }}.nupkg -s "github"
