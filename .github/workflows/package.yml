@@ -11,7 +11,8 @@ on:
 
 jobs:
   build:
-
+    outputs:
+      pkgVersion: ${{ steps.version.outputs.nuGetVersion }}
     runs-on: ubuntu-latest
 
     steps:
@@ -43,6 +44,20 @@ jobs:
       
     - name: Package
       run: dotnet pack --no-build -p:PackageVersion=${{ steps.version.outputs.nuGetVersion }} -c Release
-      
+    
+    - name: Upload Package
+      uses: actions/upload-artifact@v3.1.2
+      with:
+        name: Oakular.Stateful.${{ steps.version.outputs.nuGetVersion }}.nupkg
+        path: ./Oakular.Stateful/bin/Release/Oakular.Stateful.${{ steps.version.outputs.nuGetVersion }}.nupkg
+        
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download Package
+      uses: actions/download-artifact@v3.0.2
+      with:
+        name: Oakular.Stateful.${{ needs.build.outputs.pkgVersion }}.nupkg
     - name: Push
-      run: dotnet nuget push ./Oakular.Stateful/bin/Release/Oakular.Stateful.${{ steps.version.outputs.nuGetVersion }}.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
+      run: dotnet nuget push Oakular.Stateful.${{ needs.build.outputs.pkgVersion }}.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
